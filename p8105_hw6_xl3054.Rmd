@@ -5,5 +5,52 @@ date: "2025-12-03"
 output: github_document
 ---
 
+# Problem 1
+```{r}
+library(tidyverse)
+homicide = read_csv("data/homicide-data.csv") %>% 
+  janitor::clean_names() %>%
+  mutate(city_state = paste0(city, ", ", state),
+         solved_bin = ifelse(disposition == "Closed by arrest", 1, 0),
+         victim_age = ifelse(victim_age %in% c("Unknown", ""), NA, victim_age),
+         victim_age = as.numeric(victim_age),
+         victim_sex  = factor(victim_sex, levels = c("Female", "Male")),
+         victim_race = factor(victim_race)) %>% 
+  filter(!(city_state %in% c("Dallas, TX", "Phoenix, AZ", "Kansas City, MO", "Tulsa, AL")),
+         victim_race %in% c("White", "Black"))
 
+homicide %>% 
+  glm(solved_bin ~ victim_age + victim_sex + victim_race, 
+      data = . , family = binomial) %>% 
+  broom::tidy(conf.int = TRUE, exponentiate = TRUE) %>% 
+  filter(term == "victim_sexMale") %>% 
+  select(term, estimate, conf.low, conf.high) %>% 
+  knitr::kable(digits = 4)
 
+## for each city
+homicide_or = homicide %>% 
+  group_by(city_state) %>% 
+  nest() %>% 
+  mutate(model = purrr::map(data, 
+                            ~ glm(solved_bin ~ victim_age + victim_sex + victim_race,
+                                  data   = .x,
+                                  family = binomial)),
+         tidied = purrr::map(model, ~ broom::tidy(.x, conf.int = TRUE, exponentiate = TRUE))) %>% 
+  unnest(tidied) %>% 
+  filter(term == "victim_sexMale") %>% 
+  select(city_state, term, estimate, conf.low,conf.high) %>% 
+  arrange(desc(estimate))
+
+homicide_or %>% 
+  knitr::kable(digits = 4)
+
+homicide_or %>% 
+  ggplot(aes(x = reorder(city_state, estimate), y = estimate)) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "red") +
+  geom_pointrange(aes(ymin = conf.low, ymax = conf.high)) +
+  coord_flip() +
+  labs(x = "City", y = "Adjusted odds ratio (male vs female)",
+       title = "Adjusted OR for solving homicides (Male vs Female)") +
+  theme_minimal() +
+  theme(axis.text.y = element_text(size = 7))
+```
