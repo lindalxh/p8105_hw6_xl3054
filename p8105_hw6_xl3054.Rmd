@@ -1,0 +1,9 @@
+---
+title: "p8105_hw6_xl3054"
+author: "Xinhui Lin (xl3054)"
+date: "2025-12-03"
+output: github_document
+---
+
+
+
