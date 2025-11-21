@@ -54,3 +54,58 @@ homicide_or %>%
   theme_minimal() +
   theme(axis.text.y = element_text(size = 7))
 ```
+
+
+# Problem 2
+```{r}
+library(p8105.datasets)
+data("weather_df")
+
+set.seed(123)
+
+boot_once = function(data) {
+  boot_df = data %>% 
+    sample_frac(size = 1, replace = TRUE)
+    fit = lm(tmax ~ tmin + prcp, data = boot_df)
+    r2_hat = broom::glance(fit)$r.squared
+    coef_df = broom::tidy(fit)
+    beta1 = coef_df$estimate[coef_df$term == "tmin"]
+    beta2 = coef_df$estimate[coef_df$term == "prcp"]
+    ratio = beta1 / beta2
+    tibble(r2 = r2_hat, ratio = ratio)
+}
+
+boot_res = map_dfr(1:5000, ~boot_once(weather_df))
+
+boot_res %>%
+  pivot_longer(everything()) %>%
+  ggplot(aes(value)) +
+  geom_density() +
+  facet_wrap(~name, scales = "free") +
+  labs(title = "Bootstrap distributions of r^2 and Beta1/Beta2")
+```
+
+The bootstrap distribution of $\hat{r^2}$ is kind of tight and almost symmetric, centered around 0.942. This means that the fitted model consistently explains a large amount of the variation in `tmax`, and the estimated $\hat{r^2}$ does not change much across different bootstrap samples.
+
+The ratio $\frac{\hat{\beta_1}}{\hat{\beta_2}}$ compares the effect of minimum temperature relative to the effect of precipitation. However, because the precipitation coefficient is very small and close to zero, this ratio becomes very unstable. As a result, the bootstrap distribution is wide, heavily skewed, and has a long tail toward large negative values. This makes the ratio hard to interpret and less reliable than the estimate of $\hat{r^2}$.
+
+```{r}
+ci_r2 = quantile(boot_res$r2, probs = c(0.025, 0.975))
+ci_ratio = quantile(boot_res$ratio, probs = c(0.025, 0.975))
+
+tibble(parameter = c("r^2", "beta1 / beta2"),
+       lower = c(ci_r2[1], ci_ratio[1]),
+       upper = c(ci_r2[2], ci_ratio[2])) %>% 
+  knitr::kable(digits = 4, caption = "95% Bootstrap Confidence Intervals")
+```
+
+# Problem 3
+```{r}
+read_csv("data/birthweight.csv") %>% 
+  janitor::clean_names()
+```
+
+
+
+
+
