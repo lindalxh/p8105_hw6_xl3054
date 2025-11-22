@@ -101,9 +101,71 @@ tibble(parameter = c("r^2", "beta1 / beta2"),
 
 # Problem 3
 ```{r}
-read_csv("data/birthweight.csv") %>% 
-  janitor::clean_names()
+birthweight = read_csv("data/birthweight.csv") %>% 
+  janitor::clean_names() %>% 
+  mutate(babysex = factor(babysex, levels = c(1, 2),
+                          labels = c("male", "female")),
+         frace = factor(frace, levels = c(1, 2, 3, 4, 8, 9),
+                        labels = c("White", "Black", "Asian", 
+                                   "Puerto Rican", "Other", "Unknown")),
+         mrace = factor(mrace, levels = c(1, 2, 3, 4, 8),
+                        labels = c("White", "Black", "Asian", "Puerto Rican", "Other")),
+         malform = factor(malform, levels = c(0, 1), 
+                          labels = c("absent", "present")))
+
+birthweight %>% summarize(across(everything(), ~ sum(is.na(.))))
+
+bw_model = lm(bwt ~ babysex + bhead + blength + gaweeks + wtgain + mheight + momage + mrace + ppbmi, data = birthweight)
+summary(bw_model)
 ```
+
+I proposed a regression model that includes the predictors `babysex`, `bhead`, `blength`, `gaweeks`, `wtgain`, `mheight`, `momage`, `mrace`, and `ppbmi`. This model incorporates both infant characteristics and maternal factors that are biologically relevant to birthweight. Baby’s head circumference, height, gestational age, and sex are the primary and most direct indicators of a baby's size and development at birth. The height, weight gain, and BMI of the mother reflect nutritional status and overall growth environment for the baby, which may also influence the baby's birthweight. In addition, I also added the mother's age and race in the model to capture any potential demographic differences that could have an effect on birth outcomes.
+
+```{r}
+library(modelr)
+birthweight %>% 
+  add_predictions(bw_model) %>%
+  add_residuals(bw_model) %>% 
+  ggplot(aes(x = pred, y = resid)) +
+  geom_point(alpha = 0.3) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(x = "Fitted birthweight (grams)", y = "Residuals",
+       title = "Residuals vs fitted values") +
+  theme_minimal()
+```
+
+```{r}
+# Cross validation
+set.seed(123)
+
+cv_df = crossv_mc(birthweight, n = 100, test = 0.2) %>%
+  mutate(train = map(train, as_tibble),
+         test  = map(test,  as_tibble))
+
+cv_models = cv_df %>% 
+  mutate(model_prop = map(train, 
+                        ~ lm(bwt ~ babysex + bhead + blength + gaweeks + 
+                               wtgain + mheight + momage + mrace + ppbmi,
+                             data = .x)),
+         model_main = map(train, ~ lm(bwt ~ blength + gaweeks, data = .x)),
+         model_int = map(train, ~ lm(bwt ~ bhead * blength * babysex, data = .x)))
+
+rmse_calc = function(model, test_df) {
+  preds = predict(model, newdata = test_df)
+  sqrt(mean((test_df$bwt - preds)^2))
+}
+
+cv_results = cv_models %>%
+  mutate(rmse_new   = map2_dbl(model_prop,   test, rmse_calc),
+         rmse_main  = map2_dbl(model_main,  test, rmse_calc),
+         rmse_int  = map2_dbl(model_int,  test, rmse_calc))
+
+cv_results %>%
+  summarize(mean_rmse_new  = mean(rmse_new),
+            mean_rmse_main = mean(rmse_main),
+            mean_rmse_int = mean(rmse_int))
+```
+
 
 
 
