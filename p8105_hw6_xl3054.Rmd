@@ -19,7 +19,9 @@ homicide = read_csv("data/homicide-data.csv") %>%
   filter(!(city_state %in% c("Dallas, TX", "Phoenix, AZ", "Kansas City, MO", "Tulsa, AL")),
          victim_race %in% c("White", "Black"))
 
+## for Baltimore
 homicide %>% 
+  filter(city_state == "Baltimore, MD") %>% 
   glm(solved_bin ~ victim_age + victim_sex + victim_race, 
       data = . , family = binomial) %>% 
   broom::tidy(conf.int = TRUE, exponentiate = TRUE) %>% 
@@ -55,6 +57,7 @@ homicide_or %>%
   theme(axis.text.y = element_text(size = 7))
 ```
 
+This plot shows the adjusted odds ratios for solving homicides involving make versus female victims across major US cities. Most estimates are around or below 1, and many confidence intervals cross 1, indicating that in most cities male-victim homicides are solved slightly lower rates than female-victim homicides, and there is not significance difference in the odds of solving homicides. Cities like New York, NY, encounter significant lower odds of solving homicides for male victims compared to female victims.
 
 # Problem 2
 ```{r}
@@ -65,6 +68,7 @@ set.seed(123)
 
 boot_once = function(data) {
   boot_df = data %>% 
+    filter(name == "CentralPark_NY") %>% 
     sample_frac(size = 1, replace = TRUE)
     fit = lm(tmax ~ tmin + prcp, data = boot_df)
     r2_hat = broom::glance(fit)$r.squared
@@ -82,12 +86,13 @@ boot_res %>%
   ggplot(aes(value)) +
   geom_density() +
   facet_wrap(~name, scales = "free") +
-  labs(title = "Bootstrap distributions of r^2 and Beta1/Beta2")
+  labs(title = "Bootstrap distributions of r^2 and Beta1/Beta2") + 
+  theme_minimal()
 ```
 
-The bootstrap distribution of $\hat{r^2}$ is kind of tight and almost symmetric, centered around 0.942. This means that the fitted model consistently explains a large amount of the variation in `tmax`, and the estimated $\hat{r^2}$ does not change much across different bootstrap samples.
+The bootstrap distribution of $\hat{r^2}$ is smooth and almost symmetric, centered around 0.915. This means that the fitted model consistently explains a large amount of the variation in `tmax`, and the estimated $\hat{r^2}$ does not change much across different bootstrap samples.
+In contrast, the bootstrap distribution of the ratio $\frac{\hat{\beta_1}}{\hat{\beta_2}}$ is extremely skewed. Most values are around zero, and a very long tail exntends to very large numbers. This suggests that ${\hat{\beta_2}}$ is often very close to zero in bootstrap samples, causing the ratio to explode and making the statistic highly unstable. The coefficient ratio is strongly influenced by sampling noise.
 
-The ratio $\frac{\hat{\beta_1}}{\hat{\beta_2}}$ compares the effect of minimum temperature relative to the effect of precipitation. However, because the precipitation coefficient is very small and close to zero, this ratio becomes very unstable. As a result, the bootstrap distribution is wide, heavily skewed, and has a long tail toward large negative values. This makes the ratio hard to interpret and less reliable than the estimate of $\hat{r^2}$.
 
 ```{r}
 ci_r2 = quantile(boot_res$r2, probs = c(0.025, 0.975))
@@ -134,6 +139,8 @@ birthweight %>%
   theme_minimal()
 ```
 
+The residuals appear roughly centered around zero. A few extreme residuals indicate potential outliers that the model does not capture well.
+
 ```{r}
 # Cross validation
 set.seed(123)
@@ -156,7 +163,7 @@ rmse_calc = function(model, test_df) {
 }
 
 cv_results = cv_models %>%
-  mutate(rmse_new   = map2_dbl(model_prop,   test, rmse_calc),
+  mutate(rmse_new   = map2_dbl(model_prop, test, rmse_calc),
          rmse_main  = map2_dbl(model_main,  test, rmse_calc),
          rmse_int  = map2_dbl(model_int,  test, rmse_calc))
 
@@ -166,8 +173,5 @@ cv_results %>%
             mean_rmse_int = mean(rmse_int))
 ```
 
-
-
-
-
+Comparing the mean RMSE of three models, the proposed model with predictors `babysex`, `bhead`, `blength`, `gaweeks`, `wtgain`, `mheight`, `momage`, `mrace`, and `ppbmi` has the lowest average RMSE (275.5092), indicating the best predictive performance among the three. The interaction model performs slightly worse (average RMSE = 288.3849), while the main-effects model has the highest average RMSE (330.7093).
 
